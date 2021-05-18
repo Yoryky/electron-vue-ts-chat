@@ -1,0 +1,242 @@
+<!-- 文本输入框 -->
+<template>
+  <div class='text'>
+    <div class='emoji'>
+      <i class='icon iconfont icon-look' @click='showEmoji = !showEmoji'></i>
+      <i class='icon iconfont icon-file' @click='showEmoji = !showEmoji'></i>
+      <i class='icon iconfont icon-cut' @click='showEmoji = !showEmoji'></i>
+      <transition name='showbox'>
+        <div class='emojiBox' v-show='showEmoji'>
+          <li v-for='(item, index) in emojis' :key='index'>
+            <img
+              :src="'static/emoji/' + item.file"
+              :data='item.code'
+              @click='content += item.code'
+            />
+          </li>
+        </div>
+      </transition>
+    </div>
+    <textarea
+      ref='text'
+      v-model='content'
+      @keyup='onKeyup'
+      @click='showEmoji = false'
+    ></textarea>
+    <transition name='appear'>
+      <div class='warn' v-show='warn'>
+        <div class='description'>不能发送空白信息</div>
+      </div>
+    </transition>
+  </div>
+</template>
+
+<script>
+import { mapGetters, mapState } from 'vuex'
+import { getRobot } from '../service/index'
+import Dexie from 'dexie'
+import XmppClient from '../../utilities/XmppClient'
+import { updateData, initCustomers, initDataBase, testCursor,testIndex,testIndexWithCursor } from '../utils/database'
+import {initDexieDb} from '../utils/dexiebase'
+
+export default {
+  data() {
+    return {
+      content: '',
+      reply: '未找到',
+      frequency: 0,
+      warn: false,
+      showEmoji: false,
+    }
+  },
+  computed: {
+    ...mapState(['selectId', 'emojis', 'robotKey']),
+    ...mapGetters(['selectedChat']),
+  },
+  methods: {
+    // 按回车发送信息
+    onKeyup(e) {
+      if (e.keyCode === 13) {
+        this.sendMessage();
+        // initDataBase().then((data) => {
+        //     initCustomers().then(data => {
+        //       //readData('444-44-4444')
+        //       //updateData('444-44-4444')
+        //       //testCursor()
+        //       //testIndex()
+        //       testIndexWithCursor()
+        //     })
+        //   },
+        // )
+        //initDexieDb()
+        // const imageThumbnail = require('image-thumbnail');
+        // try {
+        //   imageThumbnail('/home/yoryky/yjing/temp/hello.png').then(thumbnail=>{
+        //     console.log(`yoryky thumbnail ==> ${thumbnail}`);
+        //   })
+        // } catch (err) {
+        //   console.error(`yoryky err ==> ${err}`);
+        // }
+      }
+    },
+    // 点击发送按钮发送信息
+    sendMessage() {
+      if (this.content.length <= 1) {
+        this.warn = true
+        this.content = ''
+        setTimeout(() => {
+          this.warn = false
+        }, 1000)
+      } else {
+        XmppClient
+          .getInstance()
+          .sendMessage('yangjing@test.yjing.com/res', this.content, 'chat')
+        const sendMsg = {
+          content: this.content,
+          reply: this.reply,
+        }
+        const db = new Dexie('testDatabase')
+        db.version(1).stores({
+          messages: '++id,userId,name,content,createTime',
+        })
+        db.transaction('rw', db.messages, async () => {
+          const id = await db.messages.add({
+            userId: 0,
+            name: 'maodi',
+            content: this.content,
+            createTime: new Date(),
+          })
+          console.log('add message with id' + id)
+        })
+
+        this.$store.dispatch('sendMessage', sendMsg)
+        this.content = ''
+      }
+    },
+  },
+  // 在进入的时候 聚焦输入框
+  mounted() {
+    this.$refs.text.focus()
+  },
+  watch: {
+    // 在选择其它对话的时候 聚焦输入框
+    selectId() {
+      setTimeout(() => {
+        //this.$refs.text.focus();
+      }, 0)
+    },
+    // 当输入框中的值为空时 弹出提示  并在一秒后消失
+    content() {
+      if (this.content === '') {
+        if (this.frequency === 0) {
+          this.warn = true
+          this.frequency++
+          setTimeout(() => {
+            this.warn = false
+          }, 1000)
+        }
+      }
+    },
+  },
+}
+</script>
+
+<style lang='scss' scoped>
+.text {
+  position: relative;
+  height: 160px;
+  background: #f2f2f2;
+
+  .emoji {
+    position: relative;
+    height: 40px;
+    width: fit-content;
+    line-height: 40px;
+    padding: 0 20px;
+    box-sizing: border-box;
+    color: #7c7c7c;
+
+    .iconfont {
+      cursor: pointer;
+      font-size: 23px;
+      margin-right: 10px;
+
+      &:hover {
+        color: #1aad19;
+      }
+    }
+
+    .emojiBox {
+      position: absolute;
+      display: flex;
+      flex-wrap: wrap;
+      top: -210px;
+      left: -100px;
+      width: 300px;
+      height: 200px;
+      padding: 5px;
+      background-color: #fff;
+      border: 1px solid #d1d1d1;
+      border-radius: 2px;
+      box-shadow: 0 1px 2px 1px #d1d1d1;
+
+      &.showbox-enter-active,
+      &.showbox-leave-active {
+        transition: all 0.5s;
+      }
+
+      &.showbox-enter,
+      &.showbox-leave-active {
+        opacity: 0;
+      }
+    }
+  }
+
+  textarea {
+    box-sizing: border-box;
+    padding: 0 20px;
+    height: 120px;
+    width: 100%;
+    border: none;
+    outline: none;
+    font-family: "Micrsofot Yahei";
+    resize: none;
+    font-size: 14px;
+    background: #f2f2f2;
+  }
+
+  .warn {
+    position: absolute;
+    bottom: 50px;
+    right: 10px;
+    width: 120px;
+    height: 30px;
+    line-height: 30px;
+    font-size: 12px;
+    text-align: center;
+    border: 1px solid #bdbdbd;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px 1px #bdbdbd;
+
+    &.appear-enter-active,
+    &.appear-leave-active {
+      transition: all 1s;
+    }
+
+    &.appear-enter,
+    &.appear-leave-active {
+      opacity: 0;
+    }
+
+    &:before {
+      content: " ";
+      position: absolute;
+      top: 100%;
+      right: 20px;
+      border: 7px solid transparent;
+      border-top-color: #fff;
+      filter: drop-shadow(1px 3px 2px #bdbdbd);
+    }
+  }
+}
+</style>
